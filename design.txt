@@ -1,0 +1,349 @@
+
+google gin - like DI guice for GWT client side
+MVP pattern
+EventBus pattern, loose coupling
+Command pattern - forbid commands returning response
+Keep stateless
+server stateless - except for caching
+use GWT history right early - back and forward, also refresh
+Use Place abstraction - layer above history, announce Place change via EventBus
+
+
+GWT rich client platform
+
+UI request creates UI command which is passed to client side model and it works asynchronously 
+i.e. notifications about model changes come back to UI in asynchronous way.
+Client side model needs to know which UI widgets are interested in what events (EventBus)
+
+Client side model must synchronize with server side model also using commands. 
+It may be in CQRS way so we need to:
+-send confirmations/acks by server side for commands send by client side model
+-take care of nonidempotency
+-can use piggybacking for carrying server side changes along with acks
+-need to know which UI commands translate to server side commands (it means that client side model
+has 2 parts: 
+-no server side synch (normally UI specific), which can also be exported to server but on request only 
+(lazy or periodic synchronizable with server side model)
+-server side synch (business logic) or Immediately synchronizable with server side model
+
+On client side we may need special structures for storing long pageable lists. 
+It should be lazy like scala stream but with more logic to retrieve previous and next list page in advance.
+The size of the list should be retrieved from server side model (since we don't know the size on client side).
+Also search must be done on server if the list is long. 
+The new structure should be smart enough to decide whether it is better to retrieve the full list and do everything 
+on client side or do lazy load with some services (size, search, filter) on server side. 
+Server side must know the average record/item size.
+
+Webservice: RESTful vs command/model based?
+
+
+GWT AutoBean for reusable beans and auto JSON serialization
+Use RequestBuilder with JSON instead of RPC - then you can reuse web services as regular REST
+and use existing third party restful services - interoperability.
+
+
+Use gwt overlay types implementing bean interface. On server side generate scala beans implementing shared bean interface.
+
+
+Think over MVP + event bus
+
+Model: uimodel, dmodel, 
+
+Changes in the UI (opening/closing view, bring to front, change size of table etc) 
+should be done in the uimodel and then reflected in the view
+
+
+              view
+                | (uiEvents)
+          uiEventBus -- busBridge -- dEventBus  ========= sEventBus
+                |                        |                   |
+                |                        |                 sModel
+                |                        |
+                |                        |
+             uiModel                   dModel          
+                           
+on client side allow model to interact directly - update by direct function calls
+
+
+
+UI design:
+-all user events reflected in presentation immediately via local model
+-user events go to event bus
+-event bus forwards to listeners
+-event bus stores history of events and may group them and take collective action e.g. make a bulk request from server based on events so far (predictor)
+-event bus can send asynchronous requests to server directly - return immediately but we must inform user that request is pending (request must of type "expect data/response")
+-there must be element in the UI showing status (pending, error or nothing) and error/history log when clicked
+
+
+-model must store info about view i.e. which widgets are active, visible, up to date, opened, closed - concept of places and history browsing
+-event bus can do forwarding/routing based on that info - reduce number of observer calls
+
+-for ui building look at the UiBinder but we need to build view in the uimodel anyway and not in xml
+-uimodel stores layout and widget status only, so the widget status change events (resize, hide, minimize, move, layout, colors) should be registered to uiEventBus
+-dmodel -> dEventBus  but we also need info from uimodel in order to know how to display
+-based on dmodel and uimodel - synchronize with server
+
+-dmodel must contain structures that allow caching and partial retrieval so if in smodel we have a list - it may be represented in dmodel as lazyList.
+How to synchronize? The list may change on both ends. List must be represented as linked list? Then we can avoid indexation which is hard to synchronize.
+So all lists are linked lists? How to send updates? List items must have global immutable unique id (tstamp+random?) which is used for list items double linking.
+So we need a wrapper for domain objects that will convert collections into linked lists with unique ids. 
+These wrappers have additional immutable id which must be persisted so they are part of the model. Does it mean that model must be dedicated or generated?
+Maybe think in terms of rels? List and items are separate entities with globally unique ids. Additionally there are rel objects
+that link items and list with items. So any changes in the list would be rel add/remove/replace + item transfer 
+
+
+
+so common model - to be represented in dmodel and smodel must have additional constraints: simple collections only (what about map and set?)
+
+entities and rels immutable, they can be only created, removed or replaced
+rels don't have id themselves so they must be stored 
+
+entity is a collection of rels
+how to find entity value? by unique id in hash table
+how to build complex entity? find all rels having as one end entity id - process event history from the beginning of time
+how to get to the point where we know what table to display etc
+
+user -> acc -> filter -> replay events -> statement as object list
+UI list widgets operate on indexes so we need to regenerate full ui list to display so filter should define range
+
+don't reinvent - try to use graph/object db (neo4j) and implement similar structure on client side
+
+ok, go back to earth, for now classic objects
+
+
+-disp table
+
+Alternative to MVC:
+http://www.artima.com/articles/dci_vision.html
+
+
+http://blogs.msdn.com/b/aspnetue/archive/2010/09/17/second_2d00_post.aspx
+
+http://uxdesign.smashingmagazine.com/2009/01/19/12-useful-techniques-for-good-user-interface-design-in-web-applications/
+
+http://stackoverflow.com/questions/90813/best-practices-principles-for-gui-design
+
+http://www.slideshare.net/Cybersam/ui-design-lessons-learned-principles-and-best-practices#btnNext
+
+http://uxdesign.smashingmagazine.com/2009/01/12/10-useful-web-application-interface-techniques/
+
+http://uxdesign.smashingmagazine.com/2012/04/10/ui-patterns-for-mobile-apps-search-sort-filter/
+
+http://wiki.eclipse.org/UI_Best_Practices_v3.x
+
+http://mashable.com/2011/09/16/ui-design-resources/
+
+http://uxdesign.smashingmagazine.com/2009/06/23/10-ui-design-patterns-you-should-be-paying-attention-to/
+
+http://www.smashingmagazine.com/2009/06/15/40-helpful-resources-on-user-interface-design-patterns/
+
+http://www.onextrapixel.com/2010/11/03/15-ui-design-patterns-web-designers-should-keep-handy/
+
+
+
+
+Determine which mvcp classes are model specific or model object aware (handle model metadata)
+
+TableDescriptor should process model class and allocate columns based on saved user preferences. 
+For one model class (result vo) we may need many tables (presentations), all need to have default presentation settings (default TableDescriptor) 
+and also user customized one.
+
+
+result vo  -1---M- TableDescriptor(name)
+                      - vo specific part, vo metadata -> 
+                      - instance per user
+                      - default preferences values
+
+Allow auto generating TableDescriptor based on VO metadata only
+
+Can we use reflection on gwt client? If not get metadata from server encapsulated in java bean
+
+How to represent data to be consistent on client (key-value) and on server (RDB/object). Check key-value nosql databases how they are organized
+and how are search/count queries done.
+Probably we need to represent it in both ways: hash (key-value) for entities that are also represented in RDB (relational) by primary_key with entity type
+Relational C_id represents the table, hash value as json represents relational row, hash key indicates table/class 
+If not relational, how to search/count?
+ 
+http://whydoeseverythingsuck.com/2008/02/death-of-relational-database.html
+ 
+graph data - nodes and edges, what to do with foreign keys?, denormalize, add time dimension to data, 
+
+store key AND value in the node
+-writes modify directly the node value (immediate) and send command/event to update value/node for that key globally (deferred)
+-nodes can contain nested objects/entities but small and simple entities are preferred
+
+For now we can use RDB but need to determine how referenced records are going to be retrieved and stored
+-just mimic RDB in hash with foreign keys, 
+-for small datasets search/count on client by iterating and/or in memory indexing
+-for large datasets search/count on server in rdbms
+-key should contain class type info: value or reference. Many value types (primitives) but ultimately represented as string.
+-encode json key as attributeName:hexClassId:instanceId  - in this way json contains metadata, what allows deserializing to java objects without additional information
+(except custom referenceClassId)
+
+Because apps must work over the network, as the base representation let's choose serialized data - interchange format. 
+It means json with metadata + metadata mapping to particular languages (classId -> className, which also can be represented in json)
+When reading json with metadata we need to define which references to resolve i.e. load in the same response
+or resolve in place (in json - it requires special notation indicating that the reference is resolved, or just not resolved references 
+should be empty strings or "null". Empty string should be fine because even if referenced object is empty then it is an empty object {}
+If resolving in place define to which nesting level resolve references. 
+Handle optional attributes and generate classes from 
+Lists represent natively in json as arrays (protobuf 'repeated')
+When creating objects how to generate instanceId? Must be unique so 2 options:
+-use central id generator in the system. Not viable option in distributed system, communication delays, keeping high availability cost.
+-use random number - not really unique. How to handle unlikely but possible collisions? Can be used by malicious user 
+to perform DOS and db inconsistency attack. Need to control permissions to individual objects well. Should we include permissions in the key?
+
+
+Can we use thrift or protobuf instead?
+http://code.google.com/p/protobuf-gwt/
+
+It should work in GWT but problem with lazy serialization and circular references remains. Also the impedance mismatch for storing in key-value store
+
+For lazy serialization:
+protobuf is an appendable format, with individual items being merged, and repeated items being appended
+Therefore, to write a sequence as a lazy stream, all you need to do is repeatedly write the same structure with only one item in the list: 
+serializing a sequence of 200 x "Container with 1 Item" is 100% identical to serializing 1 x "Container with 200 Items".
+
+For deserialization:
+That is technically very easy to read as a stream - it all, however, comes down to which library you are using. 
+For example, I expose this in protobuf-net (a .NET / C# implementation) as Serializer.DeserializeItems<T>, which reads (fully lazy/streaming) 
+a sequence of messages of type T, based on the assumption that they are in the form you describe in the question (so Serializer.DeserializeItems<Item> 
+would be the streaming way that replaces Serializer.Deserialize<Container> - the outermost object kinda doesn't really exist in protobuf) 
+
+
+protobuf circular references?
+But nothing today - you'll get multiple copies, or if you get a circular reference it should explode.
+
+
+
+http://tbroyer.posterous.com/exploring-using-protobuf-in-the-browser
+
+
+
+So the new thing would be: json matching rdbms foreign key structure, including metadata in json transfer objects, something like json schema, 
+allows gradual, lazy building/transferring models with circular references
+also allows decoupling the module responsible for caching, optimizing network transfer, predicting requests and pushing more data in response
+to client than was requested (for predictive caching)
+All objects immutable - it makes cache invalidating easy. Modification of the value requries generating new instanceId - but then how to handle circular references?
+And how to handle stale references in other objects? Keep register of id changes?
+Foreign key mapping consistency? Orphans and FK pointing to old records?
+
+Instead of deleting/updating records, mark as delete/point to successor (new value). It will preserve old value which may be useful for undo/redo, 
+not as an undo mechanism but as a cache for it.
+If memory is scarce the old value content may be wiped out (but the successor chain must remain complete). So no entry is removed, only slimed down.
+Then the only stale data can be in inlined/in place objects so it must be handled by events/notifications.
+
+
+
+
+
+
+find:
+-json schema 
+-generating java objects from json schema
+
+
+
+"It is not very good practice to use generic types like List, Set, Map in GWT-RPC services as it will cause GWT type explosion. 
+It means that after compiling the code into JavaScript, every available subtype of List (Set, Map) will be taken into account
+resulting in large and potentially slow JavaScript and the compilation itself."
+http://stackoverflow.com/questions/2120142/how-do-i-remove-implementing-types-from-gwts-serialization-policy
+
+
+ 
+ 
+GWT Serialization
+http://stackoverflow.com/questions/6778664/gwt-how-can-i-reduce-the-size-of-code-serializers-for-rpc-calls 
+
+
+GWT RPC, tables performance:
+http://stackoverflow.com/questions/2754035/gwt-populating-a-page-from-datastore-using-rpc-is-too-slow
+
+
+Scala + GWT
+http://www.lexspoon.org/
+http://scalagwt.github.com/
+
+JavaScript loading performance
+https://developers.google.com/web-toolkit/doc/latest/DevGuideCodeSplitting
+
+GWT antipatterns
+http://www.zackgrossbart.com/hackito/antiptrn-gwt/
+
+http://www.zackgrossbart.com/hackito/tags-first-gwt/
+
+Aside: gossip protocol for peer discovery in p2p
+
+OrientDB vs H2 vs Cassandra vs CouchDB vs MongoDB vs Neo4j vs Riak
+Riak is similar to Cassandra but it is a strict name/value pair model
+
+
+RPC/message broker - it should be a queue that takes care of grouping RPC commands, retransmissions, ordering and transactions. 
+Commands marked as part of transaction should be sent all together in one request with dedicated transaction command. 
+Retransmissions may change order of commands so the broker should be aware of command dependencies. It should be the main actor
+that may switch the app to offline mode.
+
+The notion of the state must be enhanced. 
+From app client perspective there are:
+-client only state (e.g. part of user preferences, that may be browser specific). No client-server exchange
+-client state for changes that should update the server but don't need to propagate back from server to other instances of client (e.g. logs, some alerts, stats) 
+-common/shared state which is synchronized with the server (up to date)
+-common/shared state with pending synchronization to the server (changed on client that needs updating the server)
+-cached common/shared state (mutable objects) that may be out of date because of changes on the server or on other instances of client
+From server:
+-immutable objects - identify and declare upfront
+-state that should never be propagated to clients
+-state that is single user
+
+
+User/clients/groups management for shared state update:
+-server should keep track if more than one instance of the same client is connected
+-object owner
+
+
+All above represents different aspects of the model. Try to define terminology and mark model objects with flags in multi-dimensional space:
+-mutable/immutable
+-permissions read/write
+-permissions groups (user/group/all)
+
+
+History and view transitions: 
+-history stack
+-part of AppController
+
+
+
+###### Push from server - GWT comet/websocket ######
+
+http://code.google.com/p/google-web-toolkit-incubator/wiki/ServerPushFAQ
+http://code.google.com/p/gwteventservice/
+http://stackoverflow.com/questions/4526589/what-is-your-favorite-gwt-server-push-framework-library
+http://stackoverflow.com/questions/9218548/gwt-and-websocket-push-data-from-server-to-gwt-client
+http://code.google.com/p/gwt-comet/wiki/GettingStarted
+http://stackoverflow.com/questions/618656/gwt-comet-any-experience
+
+Websockets:
+http://code.google.com/p/gwt-ws/
+http://code.google.com/p/gwt-comet/wiki/WebSockets
+http://code.google.com/p/gwt-websockets/
+https://github.com/Atmosphere/atmosphere
+
+Same Origin Policy and subdomains - may need wildcard SSL certificate because of that
+"A google maps application could for example load the map images from img.maps.google.com instead of maps.google.com. The browser would perceive the two hosts as different and thus allow 2 connections to each, even if they both resolve to the same IP address" 
+
+Server Threads - Continuations
+"You could up the thread pool count in your webserver's configuration, but there are more robust, scalable solutions available, often called 'continuations'."
+
+
+######  MVP   ######
+Normally we push very simple string list data (dumb model) to the view. In more complex app 
+we may need to create object based but simplified model for passing to views.
+
+"The data object that is passed to the view is a very (and I mean very) simplistic ViewModel - basically a representation of a more complex data model using primitives. This is fine for a simplistic view, but as soon as you start to do something more complex, you quickly realize that something has to give. Either the presenter needs to know more about the view (making it hard to swap out views for other platforms), or the view needs to know more about the data model (ultimately making your view smarter, thus requiring more GwtTestCases). The solution is to use generics along with a third party that abstracts any knowledge of a cell's data type, as well as how that data type is rendered."
+
+
+
+
+
+
+

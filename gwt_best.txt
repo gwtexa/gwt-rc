@@ -1,0 +1,32 @@
+General: 
+1. View is only to render the UI. It should not hold the state of a specific domain object. All view rendering business logic should be part of Presenter layer (e.g Presenter class, Presenter helpers). 
+2. Browser itself is single threaded and developer do not have much control on client browser    configurations. Any js operation should not block the current thread. Use synchronize block, method intelligently. 
+3. Multiple RPC calls in parallel does not mean that we are saving time by achieving parallelism. If we have to fetch multiple domains / values from server on bind of presenter, try to club all multiple operations in a single RPC . At server side RPC implementation decision should be taken about the source of the data that need to be fetched. This will reduce network overhead.
+4. Reduce unnecessary traffic over RPC communication. e.g To get a single value/subset of values of a Domain, no need to send full domain object over RPC.
+5. Pagination strategy: if data are limited and we know the tentative upperbound of volume and size of data we can cache it at client side , else we have to keep data at server side browser session.
+6. Reduce creating number of branches (if else, switch increases cyclometric complexity). If existing logic needs to be modified on reusable stable component, instead of adding if clause, create a subclass to overwrite the functionality. 
+7. Rely on Domain values to render UI components instead of hard-coded rendering logic. Set/Get UI component (Widget) behavior based from/to domain attributes wherever possible. This helps to reduce tight coupling of code and  UI maintenance at lower side. 
+8. Make sure if we are switching from one presenter to another, unless it's requirement, previous presenter should unbind first. Unbind of presenter removes all handlers which are registered with UI components created in this presenter. Also make sure onUnbind() of switching presenter unbind all child presenters. This reduces load on EventBus to provide consistent performance. 
+9. Prefer composition to inheritance: unnecessarily exposing implementation details is generally a bad idea, and it's no different when you are building custom widgets. In GWT terms, this means that your custom widgets should typically extend Composite.
+10. Presenter should not have any service logic in it. All such logics should be part of service layer. This is required for code maintenance/ re usability perspective.
+
+Memory Leakage
+1. Use GIN framework to create client objects and inject the same to use where ever possible, instead of manually created objects. This reduces memory leakage.
+2.  Avoid static method call at client side except utility. Static class should not hold state of non-static object references. It can cause memory leakage. Same applies to Singleton class also.
+3.  Try not to use generic type object reference in GWT at concreate presenter as javascript object takes significant amount of time to understand the actual object reference. By default while instantiating generic object, concreate genric type should be specified in <>.
+
+
+http://code.google.com/p/gwt-best-practices-soup/
+
+http://www.summa-tech.com/blog/2012/06/11/7-tips-for-exception-handling-in-gwt/
+
+http://turbomanage.wordpress.com/2011/03/25/using-gwt-requestfactory-with-objectify/
+
+https://developers.google.com/web-toolkit/doc/latest/DevGuideMvpActivitiesAndPlaces
+https://developers.google.com/web-toolkit/articles/mvp-architecture
+https://developers.google.com/web-toolkit/articles/mvp-architecture-2
+
+http://www.amateurinmotion.com/articles/2009/07/06/gwt-command-pattern.html
+
+NoCastCheckingOptimization
+

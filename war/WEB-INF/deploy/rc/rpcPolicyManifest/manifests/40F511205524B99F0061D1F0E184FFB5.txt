@@ -1,0 +1,2 @@
+serviceClass: com.google.rc.client.GreetingService
+path: 79BCA30F1338C290987ABD2FBEBA61E7.gwt.rpc
