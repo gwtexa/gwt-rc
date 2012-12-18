@@ -14,3 +14,6 @@ appengine-web.xml
 dist/
 */WEB-INF/classes/
 gwt-unitCache/
+*/WEB-INF/deploy/
+*/rc/
+build.xml

@@ -1,2 +1,3 @@
 # Module rc
 # RPC service class, partial path of RPC policy file
+com.google.rc.client.GreetingService, 79BCA30F1338C290987ABD2FBEBA61E7.gwt.rpc
