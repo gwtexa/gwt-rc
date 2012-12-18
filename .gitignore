@@ -10,3 +10,5 @@ Thumbs.db
 Icon?
 appengine*.jar
 appengine-web.xml
+dist/
+
